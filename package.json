@@ -1,0 +1,17 @@
+{
+  "name": "oko-bridge",
+  "version": "0.4.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "Open-source edge agent for oko-cloud — connect IP cameras to cloud recording",
+  "repository": { "type": "git", "url": "https://github.com/PopLocker714/oko-bridge" },
+  "scripts": {
+    "start": "bun src/index.ts",
+    "dev": "bun --watch src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.14",
+    "typescript": "^5.7.0"
+  }
+}

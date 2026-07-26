@@ -1,0 +1,10 @@
+node_modules/
+data/
+.env
+*.log
+
+# скомпилированные бинарники (артефакты сборки — публикуются как ассеты релиза, не в git)
+oko-bridge-linux-*
+oko-bridge-darwin-*
+oko-bridge-windows-*
+SHA256SUMS.txt

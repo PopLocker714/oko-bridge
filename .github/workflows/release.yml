@@ -1,0 +1,39 @@
+name: release
+
+# Собирает bridge в самостоятельные бинарники (без Docker) и публикует в GitHub Release.
+# Триггер — пуш тега вида v1.2.3:  git tag v0.4.0 && git push origin v0.4.0
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {} # ручной запуск из вкладки Actions
+
+permissions:
+  contents: write # создание релиза + загрузка ассетов
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.10"
+
+      - name: Build bridge binaries (linux x64 + arm64)
+        run: |
+          bun install --frozen-lockfile || bun install
+          bun build --compile --target=bun-linux-x64   src/index.ts --outfile oko-bridge-linux-x64
+          bun build --compile --target=bun-linux-arm64 src/index.ts --outfile oko-bridge-linux-arm64
+
+      - name: Checksums
+        run: sha256sum oko-bridge-linux-x64 oko-bridge-linux-arm64 > SHA256SUMS.txt
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            oko-bridge-linux-x64
+            oko-bridge-linux-arm64
+            SHA256SUMS.txt
+          generate_release_notes: true

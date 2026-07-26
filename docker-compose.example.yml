@@ -1,0 +1,33 @@
+# oko-bridge — запусти на любом устройстве (мини-ПК / Raspberry Pi) в сети камер.
+# 1) Получи pairing-код в личном кабинете oko-cloud (раздел «Bridge» → «Добавить»).
+# 2) Впиши OKO_PAIR_CODE ниже, запусти: docker compose up -d
+# После первой привязки токен сохраняется в volume oko-bridge-data — код больше не нужен.
+
+services:
+  oko-bridge:
+    build: .
+    # или образ из реестра, когда опубликуем:
+    # image: ghcr.io/<you>/oko-bridge:latest
+    restart: unless-stopped
+    # host-сеть НУЖНА для ONVIF-автообнаружения: WS-Discovery шлёт UDP-multicast
+    # (239.255.255.250:3702) в вашу локальную сеть. В обычной bridge-сети Docker
+    # multicast до камер не доходит. Если автообнаружение не нужно (только ручной
+    # RTSP) — можно убрать network_mode и выставить OKO_DISCOVERY: "0".
+    # Примечание: host-режим работает на Linux (мини-ПК / Raspberry Pi), где и живёт агент.
+    network_mode: host
+    environment:
+      OKO_API: "https://api.tunnel.poploker.ru" # адрес API oko-cloud
+      OKO_PAIR_CODE: "" # код из ЛК (только на первую привязку)
+      # OKO_DISCOVERY: "1"        # ONVIF-автообнаружение камер в LAN (по умолчанию вкл; "0" — выкл)
+      # OKO_DISCOVERY_SEC: "300"  # как часто сканировать сеть, сек
+      # Шифрованный ингест (rtsps): схема берётся из desired-state автоматически. Верификация cert:
+      # OKO_INGEST_TLS_VERIFY: "1"   # дефолт — проверять серверный cert (реальный/LE). "0" — только для self-signed
+      # OKO_INGEST_CA_FILE: "/certs/ca.crt"  # если сервер на своём CA (пиннинг)
+      # OKO_RTSP_TRANSPORT: tcp
+      # OKO_HEARTBEAT_SEC: 30
+      # OKO_LOG_LEVEL: info
+    volumes:
+      - oko-bridge-data:/data
+
+volumes:
+  oko-bridge-data:
