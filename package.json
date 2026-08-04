@@ -1,6 +1,6 @@
 {
   "name": "oko-bridge",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "type": "module",
   "license": "MIT",
   "description": "Open-source edge agent for oko-cloud — connect IP cameras to cloud recording",

@@ -38,6 +38,35 @@ export async function pair(apiBase: string, code: string): Promise<{ bridgeId: s
   return j;
 }
 
+// Обратная привязка. Устройство регистрируется само и получает пару:
+//  • deviceCode   — для человека, он вводит его в кабинете;
+//  • deviceSecret — только для устройства, им опрашивается статус забора.
+export async function registerDevice(apiBase: string): Promise<{ deviceCode: string; deviceSecret: string }> {
+  const r = await fetch(`${apiBase}/api/bridges/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ agentVersion: AGENT_VERSION }),
+  });
+  if (!r.ok) throw new Error(`register failed: HTTP ${r.status}`);
+  const j = (await r.json()) as { deviceCode: string; deviceSecret: string };
+  if (!j.deviceCode || !j.deviceSecret) throw new Error("register: неполный ответ");
+  return j;
+}
+
+// Опрос статуса. Пока владелец не забрал — claimed:false. После забора приходит боевой
+// токен, ровно один раз: секрет на стороне облака гасится тем же запросом.
+export async function claimStatus(
+  apiBase: string,
+  deviceSecret: string
+): Promise<{ claimed: false } | { claimed: true; bridgeId: string; token: string }> {
+  const r = await fetch(`${apiBase}/api/bridges/claim-status`, {
+    headers: { authorization: `Bearer ${deviceSecret}` },
+  });
+  if (r.status === 401) throw new RevokedError("секрет устройства недействителен");
+  if (!r.ok) throw new Error(`claim-status failed: HTTP ${r.status}`);
+  return (await r.json()) as { claimed: false } | { claimed: true; bridgeId: string; token: string };
+}
+
 // Пинг движения (Этап 3): best-effort, облако создаёт событие/включает запись/уведомляет.
 export async function reportMotion(apiBase: string, token: string, cameraId: string): Promise<void> {
   try {

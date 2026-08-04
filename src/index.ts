@@ -1,7 +1,7 @@
 import { config, requireApiBase, AGENT_VERSION } from "./config";
 import { log } from "./log";
-import { loadState, saveState, wipeState, type State } from "./state";
-import { pair, heartbeat, reportMotion, RevokedError, type DiscoveredDevice } from "./api";
+import { loadState, saveState, wipeState, loadPending, savePending, clearPending, type State } from "./state";
+import { pair, registerDevice, claimStatus, heartbeat, reportMotion, RevokedError, type DiscoveredDevice } from "./api";
 import { ForwarderManager } from "./forward";
 import { MotionManager } from "./motion";
 import { probe } from "./discovery/wsdiscovery";
@@ -27,6 +27,49 @@ async function runDiscovery(onFound: (d: DiscoveredDevice[]) => void, stopped: (
   }
 }
 
+// Код устройства человек читает с экрана или из journalctl и вводит в кабинете —
+// показываем его отдельным блоком, а не одной строкой в потоке структурных логов.
+function showDeviceCode(code: string) {
+  const pretty = `${code.slice(0, 4)}-${code.slice(4)}`;
+  const line = "─".repeat(46);
+  process.stdout.write(
+    `\n${line}\n` +
+      `  Устройство готово, но ещё не привязано.\n\n` +
+      `  КОД УСТРОЙСТВА:  ${pretty}\n\n` +
+      `  Личный кабинет → Bridge → «Забрать устройство»\n` +
+      `  Код действует, пока устройство не заберут.\n` +
+      `${line}\n\n`
+  );
+  log.info("bridge: ожидает забора владельцем", { deviceCode: pretty });
+}
+
+// Ждём, пока владелец заберёт устройство в кабинете. Спешить некуда — опрос редкий,
+// а само ожидание и есть смысл обратного потока: коробку можно поставить заранее.
+async function waitForClaim(apiBase: string): Promise<State> {
+  let pending = await loadPending();
+  if (!pending || pending.apiBase !== apiBase) {
+    const { deviceCode, deviceSecret } = await registerDevice(apiBase);
+    pending = { apiBase, deviceCode, deviceSecret };
+    await savePending(pending);
+    log.info("bridge: зарегистрирован в облаке");
+  }
+  showDeviceCode(pending.deviceCode);
+  let announced = 0;
+  for (;;) {
+    const r = await claimStatus(apiBase, pending.deviceSecret);
+    if (r.claimed) {
+      const state: State = { apiBase, bridgeId: r.bridgeId, token: r.token, agentVersion: AGENT_VERSION };
+      await saveState(state);
+      await clearPending();
+      log.info("bridge: устройство забрано, привязка завершена", { bridgeId: r.bridgeId });
+      return state;
+    }
+    // Раз в 5 минут повторяем код в логе — чтобы его не пришлось искать в старых строках.
+    if (++announced % 60 === 0) showDeviceCode(pending.deviceCode);
+    await sleep(config.claimPollSec * 1000);
+  }
+}
+
 async function ensurePaired(): Promise<State> {
   const existing = await loadState();
   if (existing?.token) {
@@ -34,15 +77,17 @@ async function ensurePaired(): Promise<State> {
     return existing;
   }
   const apiBase = requireApiBase();
-  if (!config.pairCode) {
-    throw new Error("нет сохранённой привязки и не задан OKO_PAIR_CODE — получите код в личном кабинете");
+  // Путь с кодом из кабинета остаётся основным, если код задан явно.
+  if (config.pairCode) {
+    log.info("bridge: привязка по коду…");
+    const { bridgeId, token } = await pair(apiBase, config.pairCode);
+    const state: State = { apiBase, bridgeId, token, agentVersion: AGENT_VERSION };
+    await saveState(state);
+    log.info("bridge: привязан", { bridgeId });
+    return state;
   }
-  log.info("bridge: привязка по коду…");
-  const { bridgeId, token } = await pair(apiBase, config.pairCode);
-  const state: State = { apiBase, bridgeId, token, agentVersion: AGENT_VERSION };
-  await saveState(state);
-  log.info("bridge: привязан", { bridgeId });
-  return state;
+  // Кода нет — разворачиваем поток: объявляем себя и ждём, пока заберут.
+  return waitForClaim(apiBase);
 }
 
 async function main() {

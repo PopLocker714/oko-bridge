@@ -1,5 +1,6 @@
-// Конфиг агента из env. На первом старте нужен OKO_API + OKO_PAIR_CODE (или уже сохранённый state).
-export const AGENT_VERSION = "0.4.0"; // Этап 4: нативная установка бинарником + systemd (без Docker)
+// Конфиг агента из env. На первом старте нужен OKO_API; код привязки не обязателен —
+// без него устройство регистрируется само и ждёт, пока владелец заберёт его в кабинете.
+export const AGENT_VERSION = "0.5.0"; // Этап 4: обратная привязка (device-code) + короткий URL установки
 
 function req(name: string): string {
   const v = process.env[name];
@@ -12,6 +13,7 @@ export const config = {
   pairCode: process.env.OKO_PAIR_CODE || "",
   dataDir: process.env.OKO_DATA_DIR || "/data",
   heartbeatSec: Number(process.env.OKO_HEARTBEAT_SEC || 30),
+  claimPollSec: Number(process.env.OKO_CLAIM_POLL_SEC || 5), // как часто спрашивать «меня уже забрали?»
   rtspTransport: process.env.OKO_RTSP_TRANSPORT || "tcp", // tcp надёжнее за NAT
   inputTimeoutSec: Number(process.env.OKO_INPUT_TIMEOUT_SEC || 15), // -rw_timeout: роняет ffmpeg на залипшем входе
   // Шифрованный ингест (rtsps): верифицировать серверный cert. "1" — да (реальный/LE cert, защита от MITM),
